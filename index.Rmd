@@ -6,10 +6,8 @@ output:
         toc: TRUE
         toc_float: TRUE
 ---
-
 This is my PM566 Final Project website.
 
-#lab setup
 ```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
 library(data.table)
 library(tidyverse)
@@ -18,63 +16,180 @@ library(plotly)
 if(!require(DT)) install.packages("DT")
 library(DT)
 library(knitr)
+library(readr)
+library(readxl)
+library(lubridate)
+library(psych)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(leaflet)
+library(tidyr)
+library(tidyselect)
+if(!require(ggformula)) install.packages("ggformula")
+if(!require(ggstance)) install.packages("ggstance")
+if(!require(gghighlight))install.packages("gghighlight")
+library(gghighlight)
+library(ggformula)
+library(ggstance)
+```
+# 1.Background story:
+I was in the US at the beginning of 2020, and then back to China in March 2020 and quarentined. So I was observing how did the pandemic spreaded so quickly and sharply increased around the world and specificly in the US. On the other side, after the few first months in 2020, the pandemic was considered as well controlled. And I feel it will be meaningful to compare with those two countries. 
+
+# 2.Introduction: 
+I got this dataset from "https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases?". These two datasets are about the accumulated-confirmed and death cases of different countries around the world throughout the whole pandemic (1/22/20-11/30/22), reported in daily basis. The data is updating everyday by John Hopkins 
+Questions: the main goal is to compare and visualize China and the US data. First, we need to download them and converted the empty columns to NA
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+download.file("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv", "time_series_covid19_confirmed_global.csv", method="libcurl", timeout = 60)
+confirmed <- read.csv("time_series_covid19_confirmed_global.csv", header = TRUE, na.strings = c("", " "))
+ 
+download.file("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_deaths_global.csv&filename=time_series_covid19_deaths_global.csv", "time_series_covid19_deaths_global.csv", methos="libcurl", timeout = 60)
+deaths <- read.csv("time_series_covid19_deaths_global.csv", header = TRUE, na.strings = c("", " "))
+```
+We have variables called "province" ""Country/Region", "Lat", "Long" and different dates
+
+# 3. Confirmed cases presenting in the map
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+world <- map_data("world")
+cutoffs <- c(1, 1000, 5000, 20000, 60000)
+ggplot() +
+ geom_polygon(data = world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+ geom_point(data=confirmed, aes(x=Long, y=Lat, colour=confirmed$Confirmed), stroke=F, alpha=0.3) +
+ scale_size_continuous(name="Cases", trans="log", range=c(1,7), breaks=cutoffs, labels = c("1-999", "1000-4999", "5000-19999", "2,0000-59,999", "60,000+")) +
+  
+    # scale_alpha_continuous(name="Cases", trans="log", range=c(0.1, 0.9),breaks=cutoffs) +
+    scale_color_viridis_c(option="inferno",name="Cases", trans="log",breaks=cutoffs, labels = c("1-999", "1000-4999", "5000-19999", "2,0000-59,999", "60,000+")) +
+    theme_void() +
+    guides( colour = guide_legend()) +
+    labs(caption = "World Confirmed Cases Heat Map") +
+    theme(
+      legend.position = "bottom",
+      text = element_text(color = "#22211d"),
+      plot.background = element_rect(fill = "#ffffff", color = NA), 
+      panel.background = element_rect(fill = "#ffffff", color = NA), 
+      legend.background = element_rect(fill = "#ffffff", color = NA)
+    )
 ```
 
+# 4. Transform the confirmed and deaths data of these two countries into dataframes 
 ```{r}
-# Initialize code chunk options
-opts_chunk$set(
-  warning = FALSE,
-  message = FALSE,
-  eval=TRUE,
-  echo = TRUE,
-  cache = FALSE,
-  fig.width = 7, 
-  fig.align = 'center',
-  fig.asp = 0.618,
-  out.width = "700px")
+chinaconfirmed <-
+  confirmed %>%
+  filter(Country.Region == "China")
+
+usconfirmed <-
+  confirmed %>%
+  filter(Country.Region == "US")
+
+chinadeaths <-
+  deaths %>%
+  filter(Country.Region == "China")
+
+usdeaths <-
+  deaths %>%
+  filter(Country.Region == "US")
 ```
 
+# 5. reshape the data frames, transform date into normal numbers
+#those dataframes are represented as a single row with the date values as columns. This format is not ideal and cannot be graphed or used in model creation. Now lets 
 ```{r}
-source("process_COVID_data.R")
-p1_scatter <- cv_states_today %>% 
-  plot_ly(x = ~pop_density, y = ~deathsper100k,
-          type = 'scatter', mode = 'markers', color = ~state,
-          size = ~population, sizes = c(5, 70), marker = list(sizemode='diameter', opacity=0.5),
-          hoverinfo = 'text',
-          text = ~paste( paste(state, ":", sep=""), paste(" Cases per 100k: ", per100k, sep="") , paste(" Deaths per 100k: ",
-                        deathsper100k, sep=""), sep = "<br>")) %>%
-  layout(title = "Population-normalized COVID-19 deaths vs. population density",
-                  yaxis = list(title = "Deaths per 100k"), xaxis = list(title = "Population Density"),
-         hovermode = "compare")
+chinaconfirmed %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+  chinaconfirmed
 
-# filter out "District of Columbia"
-cv_states_today_scatter <- cv_states_today %>% filter(state!="District of Columbia")
-
-p2_scatter <- cv_states_today_scatter %>% 
-  plot_ly(x = ~pop_density, y = ~deathsper100k,
-          type = 'scatter', mode = 'markers', color = ~state,
-          size = ~population, sizes = c(5, 70), marker = list(sizemode='diameter', opacity=0.5),
-          hoverinfo = 'text',
-          text = ~paste( paste(state, ":", sep=""), paste(" Cases per 100k: ", per100k, sep="") , paste(" Deaths per 100k: ",
-                        deathsper100k, sep=""), sep = "<br>")) %>%
-  layout(title = "Population-normalized COVID-19 deaths vs. population density",
-                  yaxis = list(title = "Deaths per 100k"), xaxis = list(title = "Population Density"),
-         hovermode = "compare")
+    # remove the X infront of date and convert date to normal date datatype
+    chinaconfirmed$Date <- sapply(chinaconfirmed$Date,function(x) {x <- gsub("X","",x)})
+    chinaconfirmed$Date <- as.Date(chinaconfirmed$Date, "%m.%d.%y")
+    
+usconfirmed %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+  usconfirmed
+    usconfirmed$Date <- sapply(usconfirmed$Date,function(x) {x <- gsub("X","",x)})
+    usconfirmed$Date <- as.Date(usconfirmed$Date, "%m.%d.%y")
+    
+chinadeaths %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+  chinadeaths
+    chinadeaths$Date <- sapply(chinadeaths$Date,function(x) {x <- gsub("X","",x)})
+    chinadeaths$Date <- as.Date(chinadeaths$Date, "%m.%d.%y")    
+    
+usdeaths %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+  usdeaths
+    usdeaths$Date <- sapply(usconfirmed$Date,function(x) {x <- gsub("X","",x)})
+    usdeaths$Date <- as.Date(usconfirmed$Date, "%m.%d.%y")    
 ```
 
+# 6.graphs of each province in china and US confirmed and deaths cases. 
+#We only have the whole US data (because the US only count its total number?), so I just present the US as a country total.China has 50+ countries in total, so I choose the top 7 provinces that have the largest number of deaths of deaths cases. For the death cases, I only choose the provinces have more than 1000 death cases.
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+chinaconfirmed %>%
+  group_by(Date) %>%
+  ggplot(aes(x = Date, y = Confirmed, color=Province.State, line=Province.State)) +
+  ylab("The China Confirmed Number")+
+  gghighlight(max(Confirmed) > 10000)+
+    geom_point(size=0.1, alpha=1)
 
-## Showcasing plots {.tabset}
+usconfirmed %>%
+  group_by(Date) %>%
+  ggplot(aes(x = Date, y = Confirmed)) + 
+  ylab("The US Confirmed Number")+
+  geom_point(size=0.5, alpha=1) 
 
-### Tab 1
+chinadeaths %>%
+  group_by(Date) %>%
+  ggplot(aes(x = Date, y = Confirmed, color=Province.State, line=Province.State)) + 
+  ylab("China Deaths Number")+
+  gghighlight(max(Confirmed) > 1000)+
+  geom_point(size=0.5, alpha=1) 
 
-```{r echo=FALSE}
-p1_scatter
+usdeaths %>%
+  group_by(Date) %>%
+  ggplot(aes(x = Date, y = Confirmed)) + 
+  ylab("The US Deaths Number") +
+  geom_point(size=0.5, alpha=1) 
 ```
+Hongkong is the city with the most COVID-19 confirmed cases according to the graphs, also the only one with more than 5000 death cases. 
 
-### Tab 2
+# 7. let's make those two contries in comparision
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+   confirmed %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+    confirmed
+    confirmed$Date <- sapply(confirmed$Date,function(x) {x <- gsub("X","",x)})
+    confirmed$Date <- as.Date(confirmed$Date, "%m.%d.%y")
 
-```{r echo=FALSE}
-p2_scatter
+  confirmed %>%
+  filter(Country.Region %in% c("US", "China")) %>%
+  group_by(Country.Region, Date) %>% 
+  summarise(Confirmed = sum(Confirmed)) %>% 
+  gf_point(Confirmed ~ Date) %>%
+  gf_facet_grid(Country.Region ~ ., scales = "free")+ylab("Confirmed case number")
+ 
+  #deaths case
+  deaths %>%
+   pivot_longer(cols= -one_of('Country.Region','Province.State','Lat','Long')
+               ,names_to = 'Date'
+               ,values_to = 'Confirmed') ->
+    deaths
+    deaths$Date <- sapply(confirmed$Date,function(x) {x <- gsub("X","",x)})
+    deaths$Date <- as.Date(confirmed$Date, "%m.%d.%y")
+    
+  deaths %>%
+  filter(Country.Region %in% c("US", "China")) %>%
+  group_by(Country.Region, Date) %>% 
+  summarise(Confirmed = sum(Confirmed)) %>% 
+  gf_point(Confirmed ~ Date) %>%
+  gf_facet_grid(Country.Region ~ ., scales = "free") + ylab("Deaths case number") 
 ```
-
-## {-}
+We can see China started confirming cases ealier than the US but the confirmed and deaths cases increased slightly until the beginning of 2022. However, the overall confirmed and deaths cases in the US (Until 11/29/2022, deaths cases is 1.09M, from Wikipedia) are significantly higher than China (until 11/29/2022 deaths cases is 5233, from Wikipedia). Part of the reason is probably because of the strict COVID-19 policies. 

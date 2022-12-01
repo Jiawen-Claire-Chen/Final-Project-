@@ -1,9 +1,13 @@
 name: "my-website"
 output_dir: "."
 navbar:
-  title: "Final Project"
+  title: "Final Project--Comparision of Covid-19 confirmed and death cases between the US and China "
   left:
     - text: "Home"
+      href: index.html
+    - text: "Introduction"
+      href: index.html
+    - text: "Plots"
       href: index.html
   right:
     - icon: fa-github fa-lg
