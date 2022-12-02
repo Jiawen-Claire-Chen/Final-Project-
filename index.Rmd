@@ -1,10 +1,12 @@
 ---
 title: "PM566 Final Project"
 author: "Jiawen Chen"
-output: 
-    html_document:
-        toc: TRUE
-        toc_float: TRUE
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
 ---
 This is my PM566 Final Project website.
 
@@ -41,41 +43,53 @@ I got this dataset from "https://data.humdata.org/dataset/novel-coronavirus-2019
 Questions: the main goal is to compare and visualize China and the US data. First, we need to download them and converted the empty columns to NA
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
 download.file("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv", "time_series_covid19_confirmed_global.csv", method="libcurl", timeout = 60)
-confirmed <- read.csv("time_series_covid19_confirmed_global.csv", header = TRUE, na.strings = c("", " "))
+newconfirmed <- read.csv("time_series_covid19_confirmed_global.csv", header = TRUE, na.strings = c("", " "))
  
 download.file("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_deaths_global.csv&filename=time_series_covid19_deaths_global.csv", "time_series_covid19_deaths_global.csv", methos="libcurl", timeout = 60)
 deaths <- read.csv("time_series_covid19_deaths_global.csv", header = TRUE, na.strings = c("", " "))
 ```
 We have variables called "province" ""Country/Region", "Lat", "Long" and different dates
 
-# 3. Confirmed cases presenting in the map
-```{r message=FALSE, echo=FALSE, warning=FALSE}
-world <- map_data("world")
-cutoffs <- c(1, 1000, 5000, 20000, 60000)
-ggplot() +
- geom_polygon(data = world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
- geom_point(data=confirmed, aes(x=Long, y=Lat, colour=confirmed$Confirmed), stroke=F, alpha=0.3) +
- scale_size_continuous(name="Cases", trans="log", range=c(1,7), breaks=cutoffs, labels = c("1-999", "1000-4999", "5000-19999", "2,0000-59,999", "60,000+")) +
-  
-    # scale_alpha_continuous(name="Cases", trans="log", range=c(0.1, 0.9),breaks=cutoffs) +
-    scale_color_viridis_c(option="inferno",name="Cases", trans="log",breaks=cutoffs, labels = c("1-999", "1000-4999", "5000-19999", "2,0000-59,999", "60,000+")) +
-    theme_void() +
-    guides( colour = guide_legend()) +
-    labs(caption = "World Confirmed Cases Heat Map") +
-    theme(
-      legend.position = "bottom",
-      text = element_text(color = "#22211d"),
-      plot.background = element_rect(fill = "#ffffff", color = NA), 
-      panel.background = element_rect(fill = "#ffffff", color = NA), 
-      legend.background = element_rect(fill = "#ffffff", color = NA)
-    )
+# 3. Here it shows how the confirmed cases spread in the world wide
+```{r}
+nc <- ncol(newconfirmed)
+totalconfirmed <- newconfirmed[,c(1:4,nc)]
+colnames(totalconfirmed)[5] = "sumconfirmed"
+head(totalconfirmed)
+
+countrytotalconfirmed <- totalconfirmed %>%
+  group_by(Country.Region) %>%
+  summarize(sumconfirmed=sum(sumconfirmed),
+            Lat=mean(Lat, na.rm=T),
+            Long=mean(Long, na.rm=T))
+
+#total for the whole country 
+confirmed.pal <- colorNumeric(c('darkgreen','goldenrod','brown'),domain=countrytotalconfirmed$sumconfirmed)
+confirmedmap <- leaflet(countrytotalconfirmed) %>% 
+  # The looks of the Map
+  addProviderTiles('CartoDB.Positron') %>% 
+  # Some circles
+  addCircles(
+    lat = ~Lat, lng=~Long,
+    label = ~paste0(sumconfirmed), color = ~ confirmed.pal(sumconfirmed),
+    opacity = 1, fillOpacity = 1, radius = 500
+    ) %>%
+  # And a pretty legend
+  addLegend('bottomleft', pal=confirmed.pal, values=countrytotalconfirmed$sumconfirmed,
+          title='Confirmed number', opacity=0.5)
+confirmedmap
+```
+From the graph we can see that the US has the largest confirmed case number and then India
+
+```{r}
+datatable(countrytotalconfirmed)
 ```
 
 # 4. Transform the confirmed and deaths data of these two countries into dataframes 
 ```{r}
 chinaconfirmed <-
   confirmed %>%
-  filter(Country.Region == "China")
+  filter(Country.Region == "China", Province.State !="Unknown")
 
 usconfirmed <-
   confirmed %>%
@@ -83,11 +97,15 @@ usconfirmed <-
 
 chinadeaths <-
   deaths %>%
-  filter(Country.Region == "China")
+  filter(Country.Region == "China", Province.State !="Unknown")
 
 usdeaths <-
   deaths %>%
   filter(Country.Region == "US")
+```
+
+```{r}
+datatable(totalconfirmed)
 ```
 
 # 5. reshape the data frames, transform date into normal numbers
@@ -131,25 +149,34 @@ usdeaths %>%
 # 6.graphs of each province in china and US confirmed and deaths cases. 
 #We only have the whole US data (because the US only count its total number?), so I just present the US as a country total.China has 50+ countries in total, so I choose the top 7 provinces that have the largest number of deaths of deaths cases. For the death cases, I only choose the provinces have more than 1000 death cases.
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
+g1 <-
 chinaconfirmed %>%
   group_by(Date) %>%
   ggplot(aes(x = Date, y = Confirmed, color=Province.State, line=Province.State)) +
   ylab("The China Confirmed Number")+
   gghighlight(max(Confirmed) > 10000)+
     geom_point(size=0.1, alpha=1)
+ggplotly(g1)
+g1
 
+g2 <-
 usconfirmed %>%
   group_by(Date) %>%
   ggplot(aes(x = Date, y = Confirmed)) + 
   ylab("The US Confirmed Number")+
   geom_point(size=0.5, alpha=1) 
+ggplotly(g2)
+g2
 
+g3 <-
 chinadeaths %>%
   group_by(Date) %>%
   ggplot(aes(x = Date, y = Confirmed, color=Province.State, line=Province.State)) + 
   ylab("China Deaths Number")+
   gghighlight(max(Confirmed) > 1000)+
   geom_point(size=0.5, alpha=1) 
+ggplotly(g3)
+g3
 
 usdeaths %>%
   group_by(Date) %>%
