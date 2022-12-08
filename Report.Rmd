@@ -1,12 +1,10 @@
 ---
 title: "Comparision of Covid-19 confirmed and death cases between the US and China"
 author: "Jiawen Chen"
+date: "2022-12-07"
 output:
-  pdf_document:
-    toc: yes
-  html_document:
-    toc: yes
-    toc_float: yes
+  pdf_document: default
+  html_document: FALSE
 ---
 This is my PM566 Final Project website.
 
@@ -31,16 +29,28 @@ library(tidyselect)
 if(!require(ggformula)) install.packages("ggformula")
 if(!require(ggstance)) install.packages("ggstance")
 if(!require(gghighlight))install.packages("gghighlight")
+if(!require(lubridate)) install.packages("lubridate")  
 library(gghighlight)
 library(ggformula)
 library(ggstance)
 ```
-# 1.Background story:
-I was in the US at the beginning of 2020, and then back to China in March 2020 and quarentined. So I was observing how did the pandemic spreaded so quickly and sharply increased around the world and specificly in the US. On the other side, after the few first months in 2020, the pandemic was considered as well controlled. And I feel it will be meaningful to compare with those two countries. 
+# 1.Backgroud story & Introduction
 
-# 2.Introduction: 
-I got this dataset from "https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases?". These two datasets are about the accumulated-confirmed and death cases of different countries around the world throughout the whole pandemic (1/22/20-11/30/22), reported in daily basis. The data is updating everyday by John Hopkins 
-Questions: the main goal is to compare and visualize China and the US data. First, we need to download them and converted the empty columns to NA
+
+I was in the US at the beginning of 2020, and then back to China in March 2020 and quarentined. So I
+observed how did the pandemic spreaded so quickly and sharply increased around the world and specificly in the US. On the other side, after the few first months in 2020, the pandemic was considered as well controlled. Therefore, in this project, firstly I will briefly check through the overall COVID-19 situation in the world wide. Then I analyzed China and the US seperatly to see the trend. The final step is to compare with those two countries in terms of confirmed and deaths number.
+
+# 2.Methods:(include how and where the data were acquired, how you cleaned and wrangled the data, what tools you used for data exploration)
+
+## About the data 
+
+I downloaded the datasets from "https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases?"in CSV format and updated daily and then chose the global confirmed and deaths throughout the whole pandemic (1/22/20-recent two days). The datas are updated everyday by John Hopkins center.  
+
+## Preparation
+
+However, the format of two datasets are about the accumulated-confirmed and death cases of different countries. So I did some filter out steps of countries/regions, cleaned and normalized that data, for example tidying dates and consolidating them into normalized time series. We have variables called "province" ""Country/Region", "dates" and Lat" and "Long" representing different regions. Notice that each day’s count are in separate columns. For this analysis, it would be nicer to have a column for date and a column for count instead. Also I select and transformed these two countries from the total death dataset into data frames.
+
+------------------------------------------------------------------------------------------------
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
 download.file("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv", "time_series_covid19_confirmed_global.csv", method="libcurl", timeout = 60)
 newconfirmed <- read.csv("time_series_covid19_confirmed_global.csv", header = TRUE, na.strings = c("", " "))
@@ -60,7 +70,7 @@ head(totalconfirmed)
 countrytotalconfirmed <- totalconfirmed %>%
   group_by(Country.Region) %>%
   summarize(sumconfirmed=sum(sumconfirmed),
-            Lat=mean(Lat, na.rm=T),
+ Lat=mean(Lat, na.rm=T),
             Long=mean(Long, na.rm=T))
 
 #total for the whole country 
@@ -79,18 +89,26 @@ confirmedmap <- leaflet(countrytotalconfirmed) %>%
           title='Confirmed number', opacity=0.5)
 confirmedmap
 ```
-From the graph we can see that the US has the largest confirmed case number and then India
+
+From the map, the legend shows the range of confirmed number. The red color means higher confirmed number. We can see that there America has the red dot, then India, Brazil and Germany have yellow dots. However, one drawback of this dataset is that some country, for example China's data is updated by Province, but the data from the US as a country total.
 
 # 4. Table to check total confirmed cases for each country 
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
 datatable(totalconfirmed)
 ```
-We can also check and sort which are the top countries have the greatest or leastest cases number
+We can also check and sort which are the top countries have the greatest or smallest cases number. Corresponding with the previous heat map, the top five countries have the greatest cases number are US, India and France and Germany 
 
 # 5. Transform the total death dataset, confirmed and deaths data of these two countries into dataframes 
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
+  totaldeaths <-
+  deaths %>% 
+  pivot_longer(-(1:4),                        # the first 4 columns are not part of the pivot
+    names_to = "Date",             # names of the remaining columns will be put into a date column
+    values_to = "Confirmed")   # values will be put into a column called confirmed
+   totaldeaths$Date <- sapply(totaldeaths$Date,function(x) {x <- gsub("X","",x)})
+    totaldeaths$Date <- as.Date(totaldeaths$Date, "%m.%d.%y") 
+
 load("confirmed.Rdata")
-load("deaths.Rdata")
 
 chinaconfirmed <-
   confirmed %>%
@@ -100,20 +118,20 @@ usconfirmed <-
   confirmed %>%
   filter(Country.Region == "US")
 
-load("deaths.Rdata")
 chinadeaths <-
-  deaths %>%
+  totaldeaths %>%
   filter(Country.Region == "China", Province.State !="Unknown")
 
-load("deaths.Rdata")
 usdeaths <-
-  deaths %>%
+  totaldeaths %>%
   select(.,-Province.State) %>%
   filter(Country.Region == "US")
 ```
 
 # 6.graphs of each province in china and US confirmed and deaths cases. 
-We only have the whole US data (because the US only count its total number?), so I just present the US as a country total.China has 50+ countries in total, so I choose the top 7 provinces that have the largest number of deaths of deaths cases. For the death cases, I only choose the provinces have more than 1000 death cases.
+
+As I mentioned above, we only have the whole US data, so I just present the US as a country total. China has 50+ provinces in total and thus can be hard to represent them all, so I choose the top 6 provinces that have the largest number of confirmed cases. For the death cases, I only choose the provinces have more than 1000 death cases.
+
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
 load("confirmed.Rdata")
 g1 <-
@@ -151,7 +169,7 @@ usdeaths %>%
   geom_point(size=0.5, alpha=1) 
 ggplotly(g4)
 ```
-Hongkong is the city with the most COVID-19 confirmed cases according to the graphs, also the only one with more than 5000 death cases. 
+The top 6 provinces/region that have the largest number confirmed case are Hongkong, Hubei, Shanghai, Jilin, Guangdong and Beijing. Hongkong is the city with the most COVID-19 confirmed cases according to the graphs, and it is the only region with more than 5000 death cases. 
 
 # 7. let's make those two contries in comparision
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
@@ -167,7 +185,7 @@ ggplotly(g5)
  
   #Deaths case
 g6 <-
-  deaths %>%
+  totaldeaths %>%
   filter(Country.Region %in% c("US", "China")) %>%
   group_by(Country.Region, Date) %>% 
   summarise(Confirmed = sum(Confirmed)) %>% 
@@ -175,4 +193,11 @@ g6 <-
   gf_facet_grid(Country.Region ~ ., scales = "free") + ylab("Deaths case number") 
 ggplotly(g6)
 ```
-We can see China started confirming cases ealier than the US but the confirmed and deaths cases increased slightly until the beginning of 2022. However, the overall confirmed and deaths cases in the US (Until 11/29/2022, deaths cases is 1.09M, from Wikipedia) are significantly higher than China (until 11/29/2022 deaths cases is 5233, from Wikipedia). Part of the reason is probably because of the strict COVID-19 policies. 
+
+From these two pairs of comparision, we can conclude from 2020 to the beginning of 2022, China had a slowly increasing confirmed case number while the US rapidly increased. However, after 2022, this number of China sharply increased while the US has a relatively mild increasing trend. 
+
+------------------------------------------------------------------------------------------------
+
+# Conclusion and Summary
+
+We can see China started confirming cases ealier than the US but the confirmed and deaths cases increased slightly until the beginning of 2022. However, the overall confirmed and deaths cases in the US (Until 11/29/2022, deaths cases is 1.09M, from Wikipedia) are significantly higher than China (until 11/29/2022 deaths cases is 5233, from Wikipedia). Part of the reason is probably because of the strict COVID-19 policies. In terms of Hongkong, it executed different policies compared with the mainland of China
